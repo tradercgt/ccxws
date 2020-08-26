@@ -2,28 +2,96 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/node:8.11
-
+      - image: circleci/node:10
     working_directory: ~/repo
-
     steps:
       - checkout
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-          - v1-dependencies-{{ checksum "package.json" }}
-          # fallback to using the latest cache if no exact match is found
-          - v1-dependencies-
-
       - run: npm install
+      - persist_to_workspace:
+          root: ~/repo
+          paths: node_modules
 
-      - save_cache:
-          paths:
-            - node_modules
-          key: v1-dependencies-{{ checksum "package.json" }}
+  test_bibox:
+    docker:
+      - image: circleci/node:10
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          command: |-
+            $(npm bin)/mocha __tests__/exchanges/bibox-client.spec.js
 
-      # run tests!
-      - run: npm run test:ci
+  test_binance:
+    docker:
+      - image: circleci/node:10
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          command: |-
+            $(npm bin)/mocha __tests__/exchanges/binance-client.spec.js
 
+  test_binancefcm:
+    docker:
+      - image: circleci/node:10
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          command: |-
+            $(npm bin)/mocha __tests__/exchanges/binance-futures-coinm-client.spec.js
 
+  test_binancefum:
+    docker:
+      - image: circleci/node:10
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          command: |-
+            $(npm bin)/mocha __tests__/exchanges/binance-futures-usdtm-client.spec.js
+
+  done:
+    docker:
+      - image: circleci/buildpack-deps:curl-browsers
+    steps:
+      - run:
+          command: echo "Hello ${CIRCLE_USERNAME}"
+      - run:
+          name: Show some of the CircleCI runtime env vars
+          command: |-
+            echo "TRIGGERER: ${CIRCLE_USERNAME}"
+            echo "BUILD_NUMBER: ${CIRCLE_BUILD_NUM}"
+            echo "BUILD_URL: ${CIRCLE_BUILD_URL}"
+            echo "BRANCH: ${CIRCLE_BRANCH}"
+            echo "RUNNING JOB: ${CIRCLE_JOB}"
+            echo "JOB PARALLELISM: ${CIRCLE_NODE_TOTAL}"
+            echo "CIRCLE_REPOSITORY_URL: ${CIRCLE_REPOSITORY_URL}"
+
+workflows:
+  version: 2
+  test_all:
+    jobs:
+      - build
+      - test_bibox:
+          requires: [build]
+      - test_binance:
+          requires: [build]
+      - test_binancefcm:
+          requires: [build]
+      - test_binancefum:
+          requires: [build]
+      - done:
+          requires:
+            - test_bibox
+            - test_binance
+            - test_binancefcm
+            - test_binancefum
